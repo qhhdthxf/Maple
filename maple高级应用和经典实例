@@ -1,0 +1,166 @@
+1.复变函数中的Wirtinger导数、Beltrami方程及椭圆域
+
+实变量到复变量：
+r2c := (expr, x, y, z) -> subs(x = 1/2*z + 1/2*conjugate(z), y = -1/2*I*(z - conjugate(z)), expr);
+R2C := (f, z) -> r2c(f(x, y), x, y, z);
+unapply(R2C(g, l), l);
+
+复变量到实变量：
+c2r := (expr, z, x, y) -> evalc(subs(conjugate(z) = x - y*I, z = x + y*I, expr));
+C2R := (g, x, y) -> c2r(g(z), z, x, y);
+unapply(C2R(f, u, v), u, v);
+
+例子：
+test || r := (x, y) -> log(x + y*I);
+test || c := unapply(R2C(test || r, z), z);
+test || c(z);
+C2R(test || c, x, y);
+
+Wirtinger导数：(共轭存在时，对z或z共轭求导的方法)
+w1diff := (expr, z) -> subs(dummy = conjugate(z), diff(subs(conjugate(z) = dummy, expr), z));
+w2diff := (expr, z) -> subs(dummy = conjugate(z), diff(subs(conjugate(z) = dummy, expr), dummy));
+
+例子：
+w1diff(Test || c, z);
+w2diff(Test || c, z);
+
+Beltrami方程以及椭圆参数：
+
+jacob := (expr, z) -> abs(w1diff(expr, z))^2 - abs(w2diff(expr, z))^2;
+mu := (expr, z) -> w2diff(expr, z)/w1diff(expr, z);
+axialratio := (expr, z) -> (1 - abs(mu(expr, z)))/(1 + abs(mu(expr, z)));
+direction := (expr, z) -> 1/2*argument(mu(expr, z)) - 1/2*Pi;
+
+例子：
+w := z -> z - 1/conjugate(z);
+J := jacob(w(z), z);
+m := mu(w(z), z);
+
+绘制椭圆域：
+with(plots);
+plotellipse := (a, b, phi, x0, y0) -> plot([a*cos(t)*cos(phi) - b*sin(t)*sin(phi) + x0, a*cos(t)*sin(phi) + b*sin(t)*cos(phi) + y0, t = 0 .. 2*Pi], axes = boxed, scaling = constrained);
+localellipse := proc(expr, z::name, z0::complex, r::numeric) local ar, phi, J, a, b; ar := unapply(axialratio(expr, z), z)(z0); phi := unapply(direction(expr, z), z)(z0); J := unapply(jacob(expr, z), z)(z0); if J <> 0 then a := r/sqrt(abs(J*ar)); else a := 1; end if; b := ar*a; plotellipse(a, b, phi, Re(z0), Im(z0)); end proc;
+localellipse(z + 1/conjugate(z), z, 1 + I, 0.5);
+
+ellipsefield := proc(expr, z::name, a::numeric, range::range) local ar, phi, m, n, g, x1, x2, y1, y2, nl, ml, i, grid; x1 := Re(lhs(range)); x2 := Re(rhs(range)); y1 := Im(lhs(range)); y2 := Im(rhs(range)); if 4 < _npassed then grid := _passed[5]; ml := {seq(x1 + i*(x2 - x1)/(grid[1] - 1), i = 0 .. grid[1] - 1)}; nl := {seq(y1 + i*(y2 - y1)/(grid[2] - 1), i = 0 .. grid[2] - 1)}; else ml := x1 .. x2; nl := y1 .. y2; end if; phi := unapply(evalf(direction(expr, z)), z); ar := unapply(evalf(axialratio(expr, z)), z); g := seq(seq(plotellipse(a, a*ar(m + n*I), phi(m + n*I), m, n), m = ml), n = nl); display([g]); end proc;
+ellipsefield(z - 0.5*conjugate(z) - 1/conjugate(z), z, 0.3, -2.0001 - 2*I .. 2 + 2*I, [6, 7]);
+
+
+2.傅立叶级数
+
+with(plots);
+setoptions(thickness = 6);#设置线的粗细
+f := signum(sin(x));
+plot(f, x = -3*Pi .. 3*Pi, -1.2 .. 1.2, title = "The square wave") #其中-1.2 .. 1.2是y轴的显示范围
+
+求该函数的傅立叶参数：
+assume(n,integer) #我估计这里的an和bn是
+a[0] := 1/2*Int('f', x = -Pi .. Pi)/Pi = 1/2*int(f, x = -Pi .. Pi)/Pi;
+a[n] := Int('f'*cos(n*x), x = -Pi .. Pi)/Pi = int(f*cos(n*x), x = -Pi .. Pi)/Pi;
+b[n] := Int('f'*sin(n*x), x = -Pi .. Pi)/Pi = int(f*sin(n*x), x = -Pi .. Pi)/Pi;
+B[k] := -2*((-1)^k - 1)/(k*Pi);
+
+B[k]作为一个数列，可由一下语句得到具体值：
+subs(k = 1, B[k]);#单独值
+eval(seq([i, subs(k = i, B[k])], i = 1 .. 10)); #输出整个列表
+
+关于对比拟合度的绘图：
+S := (n, x) -> sum(B[k]*sin(k*x), k = 1 .. n);
+plot({f, S(1, x)}, x = -2*Pi .. 2*Pi, title = "First approximation(n=1)");
+plot([f, S(3, x), S(5, x), S(7, x)], x = -Pi - 0.01 .. Pi + 0.01, title = "Higher approximations:n=3(Green),n=5(Blue),n=7(Black)", color = [red, green, blue, black], numpoints = 100);
+plot([f - S(251, x)], x = -0.10 .. Pi + 0.1, title = "The error", color = [red, blue], numpoints = 150, axes = boxed)#绘制误差
+#绘制S这个函数的收敛性
+plot([S(n, Pi/2)], n = 2 .. 300, 0.9 .. 1.1, title = "Convergence of the series at one point (Pi/2)", color = [red, blue], numpoints = 299);
+
+
+
+3.非线性方程的近似解
+迭代法：
+
+f := x -> 2*x - 3 - ln(x);
+g := x -> 1/2*ln(x) + 3/2;
+evalf(g(1));
+evalf(g(%));
+for n to 10 do
+    evalf(g(%));
+end do;
+
+plot({x, g(x)}, x = 0 .. 2, 0 .. 2, style = LINE);
+
+cobweb := proc(expr, initial, number, left, right, bottom, top) local f, t, i, n, p1, p2; global x1, x2; f := expr; x1 := initial; n := number; x2 := subs(x = x1, f); t := x1, 0, x1, x2; for i from 2 to n do x || (i + 1) := subs(x = x || i, f); t := t, x || i, x || i, x || i, x || (i + 1); end do; p1 := plot({x, expr}, x = left .. right, y = bottom .. top); p2 := plots[pointplot]([t], style = LINE); plots[display](p1, p2); end proc;
+#上述需要注意复制粘贴以后 串联符｜｜需要重新打
+cobweb(g(x), 1, 20, 0, 2, 0, 2);
+
+牛顿法：
+f := x -> exp(x) - sin(x);
+Newton := proc(f, x) x - f/diff(f, x); end proc;
+g := Newton(f(x), x);
+g := unapply(g, x);
+evalf(g(-5));
+evalf(g(%));
+for n to 5 do
+    evalf(g(%));
+end do;
+
+nr := proc(f, initial, number, left, right, bottom, top) local t, n, N, g, p1, p2; N := number; t := NULL; g := unapply(Newton(f(x), x), x); x || 1 := initial; for n to N do t := t, x || n, 0, x || n, f(x || n); x || (n + 1) := evalf(g(x || n)); end do; p1 := plot(f(x), x = left .. right, y = bottom .. top); p2 := plots[pointplot]([t], style = LINE); print(`Zero at x = `, evalf(x || n)); plots[display](p1, p2); end proc;
+nr(f, -4, 5, -6, 0, -1, 1.5);
+
+4.拉格朗日乘子
+
+一个拉格朗日乘子法求极值的例子：
+f := x^2 + y^2;
+q := x^2 + y^2 + 2*x - 2*y + 1;
+g := mu*q + f;
+exp1 := diff(g, x);
+exp2 := diff(g, y);
+exp3 := solve({exp1 = 0, exp2 = 0, q = 0}, {mu, x, y});
+allvalues(exp3);
+subs({x = -1 - 1/2*2^(1/2), y = 1 + 1/2*2^(1/2)}, f);
+fmax := evalf(%);
+subs({x = -1 + 1/2*2^(1/2), y = 1 - 1/2*2^(1/2)}, f);
+fmin := evalf(%);
+
+用图形检查结果：
+with(plots);
+plot1 := implicitplot(f = fmax, x = -3 .. 3, y = -3 .. 3, color = BLUE);
+plot3 := implicitplot(q = 0, x = -3 .. 3, y = -3 .. 3, color = RED);
+display({plot1, plot3}, title = 'CONDITIONAL*MAXIMUM', scaling = constrained);
+plot2 := implicitplot(f = fmin, x = -3 .. 3, y = -3 .. 3, color = GREEN);
+display({plot2, plot3}, title = 'CONDITIONAL*MINIMUM', scaling = constrained);
+display({plot1, plot2, plot3}, title = 'CONDITIONAL*MINIMUM', scaling = constrained);
+#plot画表达式，implicitplot画方程
+
+5.曲线
+
+曲率和挠率
+dp := proc(X, Y) X[1]*Y[1] + X[2]*Y[2] + X[3]*Y[3]; end proc;
+nrm := proc(X) sqrt(dp(X, X)); end proc;
+xp := proc(X, Y) local a, b, c; a := x[2]*Y[3] - X[3]*Y[2]; b := -X[1]*Y[3] + X[3]*Y[1]; c := X[1]*Y[2] - X[2]*Y[1]; [a, b, c]; end proc;
+curv := proc(alpha) local alphap, alphapp; alphap := diff(alpha, t); alphapp := diff(alphap, t); RETURN(kappa = simplify(nrm(xp(alphap, alphapp))/nrm(alphap)^3, symbolic)); end proc;
+tor := proc(alpha) local alphap, alphapp, alphappp; alphap := diff(alpha, t); alphapp := diff(alphap, t); alphappp := diff(alphapp, t); RETURN(tau = simplify(dp(xp(alphap, alphapp), alphappp)/nrm(xp(alphap, alphapp))^2, symbolic)); end proc;
+
+hel := [a*cos(t), a*sin(t), b*t];
+curv(hel);
+tor(hel);
+
+hell := subs({a = 4, b = 2}, hel);
+with(plots);
+spacecurve(hell, t = 0 .. 10*Pi, scaling = constrained, thickness = 3, color = red);
+
+curv(hell);
+tor(hell);
+
+平面曲线（内含微分方程组的求解）
+recreate := proc(kap, a, b, c, d, f, g) local sys, b1, b2, p, theta, pl; sys := diff(theta(s), s) = kap(s), diff(b1(s), s) = cos(theta(s)), diff(b2(s), s) = sin(theta(s)); p := dsolve({b1(0) = 0, b2(0) = 0, theta(0) = 0, sys}, {b1(s), b2(s), theta(s)}, type = numeric); pl := odeplot(p, [b1(s), b2(s)], a .. b, numpoints = 400, thickness = 1, axes = framed, color = red); display(pl, view = [c .. d, f .. g], scaling = constrained); end proc;
+kap1 := t -> t;
+recreate(kap1, -8, 8, -2, 2, -1.5, 1.5);
+
+
+
+
+
+
+
+
+
+
